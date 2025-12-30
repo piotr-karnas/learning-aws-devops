@@ -9,3 +9,5 @@
 <img src="igw-attached-status.png" width="500" alt="new_igw">
  - New default route
 <img src="igw-route.png" width="500" alt="new_route">
+ - Instance in cusstom VPC
+<img src="instance_custom_vpc.png" width="500" alt="instance_in_custom_vpc">
