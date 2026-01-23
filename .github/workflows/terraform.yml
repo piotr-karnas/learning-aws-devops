@@ -44,30 +44,15 @@ jobs:
     - name: Terraform validate
       run: terraform validate
 
-    - name: Terraform Plan & Artifact
+    - name: Terraform Plan
       env:
         AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION:    eu-north-1
       run: |
-        terraform plan -var-file="dev.tfvars" -no-color -out=tfplan
-        echo "🎉 Plan created: $(du -h tfplan)"
-        
-    - name: 📤 Upload Plan Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: terraform-plan-${{ github.sha }}
-        path: tfplan
-
-    - name: ✅ Plan Success!
-      if: success()
-      run: |
-        echo "🎉 TERRAFORM PLAN PASSED!"
-        echo "📊 Plan file ready for review:"
-        terraform show -no-color tfplan
-        
-    - name: 📤 Upload Plan Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: terraform-plan
-        path: tfplan
+        echo "🧠 Generating secure plan preview..."
+        terraform plan -var-file="dev.tfvars" -no-color -detailed-exitcode > plan.txt
+        echo "## 🎉 TERRAFORM PLAN" >> $GITHUB_STEP_SUMMARY
+        cat plan.txt >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Plan: $(grep -c 'to add' plan.txt) resources to add" >> $GITHUB_STEP_SUMMARY
