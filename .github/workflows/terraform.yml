@@ -27,14 +27,24 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION:    eu-north-1
       run: |
-        echo "🟢 Environment: ${{ github.ref_name || 'dev' }}"
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          ENV="pr-${{ github.event.number }}"
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          ENV="prod"
+        elif [[ "${{ github.ref_name }}" == "dev" ]]; then  
+          ENV="dev"
+        else
+          ENV="dev"
+        fi
+        
+        echo "🟢 Detected ENV: $ENV"
         terraform init -backend-config="bucket=aws-sesja8-tfstate" \
                        -backend-config="key=${{ github.ref_name || 'dev' }}/terraform.tfstate" \
                        -backend-config="region=eu-north-1"
         terraform validate
-        terraform workspace new ${{ github.ref_name || 'dev' }} || terraform workspace select ${{ github.ref_name || 'dev' }}
-        terraform plan -var-file="${{ github.ref_name || 'dev' }}.tfvars" -no-color -detailed-exitcode > plan.txt
-        echo "## 🎉 TERRAFORM PLAN [${{ github.ref_name || 'dev' }}]" >> $GITHUB_STEP_SUMMARY
+        terraform workspace new $ENV || terraform workspace select $ENV
+        terraform plan -var-file="$ENV.tfvars" -no-color -detailed-exitcode > plan.txt
+        echo "## 🎉 TERRAFORM PLAN [$ENV]" >> $GITHUB_STEP_SUMMARY
         cat plan.txt >> $GITHUB_STEP_SUMMARY
         
     - name: 🚀 Terraform Apply
@@ -44,4 +54,4 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION:    eu-north-1
       run: |
-        terraform apply -var-file="${{ github.ref_name || 'dev' }}.tfvars" -auto-approve
+        terraform apply -var-file="$ENV.tfvars" -auto-approve
