@@ -1,58 +1,62 @@
-name: 'Terraform CI/CD'
-
+name: 'Terraform Multi-Env CI/CD'
 on:
+  pull_request:
   push:
-    branches: [ "main" ]
-  pull_request: 
+    branches: [ main, dev, staging ]
 
 env:
-  TF_VERSION: '1.14.0'
+  TF_VERSION: '1.6.0'
 
 jobs:
   terraform:
-    name: 'Terraform Validate & Plan'
     runs-on: ubuntu-latest
-
+    environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name || 'dev' }}
     defaults:
       run:
         working-directory: ./aws-sesja8-ci-cd
-
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+    - uses: actions/checkout@v4
+    
+    - uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ env.TF_VERSION }}
-
-    - name: Terraform init
-      env:
-        AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_DEFAULT_REGION:    ${{ secrets.AWS_DEFAULT_REGION }}
-      run: terraform init
-
-    - name: Terraform format
-      run: |
-        echo "=== TERRAFORM FORMAT CHECK ==="
-        terraform fmt -check || echo "⚠️  Format issues detected (normal for 1st run)"
-        echo "🔧 Auto-formatting..."
-        terraform fmt -write=true -recursive .
-        echo "✅ Format check passed!"
-
-    - name: Terraform validate
-      run: terraform validate
-
-    - name: Terraform Plan
+    
+    - name: 🔧 Init, Validate, Plan
       env:
         AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION:    eu-north-1
       run: |
-        echo "🧠 Generating secure plan preview..."
-        terraform plan -var-file="dev.tfvars" -no-color -detailed-exitcode > plan.txt
-        echo "## 🎉 TERRAFORM PLAN" >> $GITHUB_STEP_SUMMARY
+        # SMART ENV LOGIC
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          ENV="pr-${{ github.event.number }}"
+          VARS="dev.tfvars"  # ← PRs = dev.tfvars ZAWSZE!
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          ENV="prod"
+          VARS="prod.tfvars" 
+        elif [[ "${{ github.ref_name }}" == "dev" ]]; then
+          ENV="dev"
+          VARS="dev.tfvars"
+        else
+          ENV="dev"
+          VARS="dev.tfvars"
+        fi        
+        echo "🟢 ENV: $ENV | VARS: $VARS"
+        terraform init -backend-config="bucket=aws-sesja8-tfstate" \
+                       -backend-config="key=$ENV/terraform.tfstate" \
+                       -backend-config="region=eu-north-1" \
+                       -backend-config="dynamodb_table=terraform-locks"
+        terraform validate
+        terraform workspace new $ENV || terraform workspace select $ENV
+        terraform plan -var-file="$VARS" -no-color -detailed-exitcode > plan.txt
+        echo "## 🎉 TERRAFORM PLAN [$ENV using $VARS]" >> $GITHUB_STEP_SUMMARY
         cat plan.txt >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "Plan: $(grep -c 'to add' plan.txt) resources to add" >> $GITHUB_STEP_SUMMARY
+        
+    - name: 🚀 Terraform Apply
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+      env:
+        AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION:    eu-north-1
+      run: |
+        terraform apply -var-file="$VARS" -auto-approve

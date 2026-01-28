@@ -1,3 +1,6 @@
+terraform {
+  backend "s3" {}  # PUSTY BLOCK - wszystko z CLI!
+}
 module "vpc" {
   source = "./modules/vpc"
   vpc_cidr = var.vpc_cidr
