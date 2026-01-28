@@ -53,10 +53,19 @@ jobs:
         cat plan.txt >> $GITHUB_STEP_SUMMARY
         
     - name: 🚀 Terraform Apply
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+      if: github.event_name == 'push'
       env:
         AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION:    eu-north-1
       run: |
+        if [[ "${{ github.ref_name }}" == "main" ]]; then
+          ENV="prod"
+          VARS="prod.tfvars"
+        else
+          ENV="dev"
+          VARS="dev.tfvars"
+        fi
+        echo "🟢 APPLY ENV: $ENV | VARS: $VARS"
+        terraform workspace select $ENV
         terraform apply -var-file="$VARS" -auto-approve
