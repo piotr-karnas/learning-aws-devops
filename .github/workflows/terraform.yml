@@ -44,7 +44,7 @@ jobs:
         echo "🟢 ENV: $ENV | VARS: $VARS"
         terraform init -backend-config="bucket=aws-sesja8-tfstate" \
                        -backend-config="key=$ENV/terraform.tfstate" \
-                       -backend-config="region=eu-north-1 \
+                       -backend-config="region=eu-north-1" \
                        -backend-config="dynamodb_table=terraform-locks"
         terraform validate
         terraform workspace new $ENV || terraform workspace select $ENV
